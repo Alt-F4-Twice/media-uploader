@@ -14,6 +14,20 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       return res.status(403).send("Forbidden");
     }
 
+    // Get current date and time
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    const seconds = String(now.getSeconds()).padStart(2, "0");
+
+    const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+
+    // Build message
+    const message = `📸 New Screenshot\nDate & Time: ${timestamp}`;
+
     const form = new FormData();
 
     // Add image with filename + content type
@@ -22,16 +36,16 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       contentType: "image/png"
     });
 
-    // Optional: add a message so it shows nicely in Discord
-    form.append("content", "📸 New Screenshot");
+    // Add message content with timestamp
+    form.append("content", message);
 
     await fetch(process.env.DISCORD_WEBHOOK, {
       method: "POST",
       body: form,
-      headers: form.getHeaders() // ← important!
+      headers: form.getHeaders()
     });
 
-    // Delete file after sending (optional for privacy)
+    // Delete uploaded file after sending
     fs.unlinkSync(req.file.path);
 
     res.send("Sent to Discord!");
