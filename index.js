@@ -15,12 +15,24 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     }
 
     const form = new FormData();
-    form.append("file", fs.createReadStream(req.file.path));
+
+    // Add image with filename + content type
+    form.append("file", fs.createReadStream(req.file.path), {
+      filename: "screenshot.png",
+      contentType: "image/png"
+    });
+
+    // Optional: add a message so it shows nicely in Discord
+    form.append("content", "📸 New Screenshot");
 
     await fetch(process.env.DISCORD_WEBHOOK, {
       method: "POST",
       body: form,
+      headers: form.getHeaders() // ← important!
     });
+
+    // Delete file after sending (optional for privacy)
+    fs.unlinkSync(req.file.path);
 
     res.send("Sent to Discord!");
   } catch (err) {
