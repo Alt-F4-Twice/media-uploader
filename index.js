@@ -14,6 +14,9 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       return res.status(403).send("Forbidden");
     }
 
+    // Get "user" from form field
+    const user = req.body.user || "Unknown";
+
     // Get current date and time
     const now = new Date();
     const year = now.getFullYear();
@@ -25,18 +28,17 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
     const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 
-    // Build message
-    const message = `📸 New Screenshot\nDate & Time: ${timestamp}`;
+    const message = `📸 New Screenshot\nBy: ${user}\nDate & Time: ${timestamp}`;
 
     const form = new FormData();
 
-    // Add image with filename + content type
+    // Add image
     form.append("file", fs.createReadStream(req.file.path), {
       filename: "screenshot.png",
       contentType: "image/png"
     });
 
-    // Add message content with timestamp
+    // Add message
     form.append("content", message);
 
     await fetch(process.env.DISCORD_WEBHOOK, {
@@ -45,7 +47,6 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       headers: form.getHeaders()
     });
 
-    // Delete uploaded file after sending
     fs.unlinkSync(req.file.path);
 
     res.send("Sent to Discord!");
