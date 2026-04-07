@@ -28,17 +28,16 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const seconds = String(now.getSeconds()).padStart(2, "0");
     const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 
-    const fullMessage = `📸 New Screenshot\nBy: ${user}\nDate & Time: ${timestamp}\nMessage: ${messageText}`;
+    // Build message
+    const fullMessage = `By: ${user}\nDate & Time: ${timestamp}\n${messageText}`;
 
     const form = new FormData();
-
-    // Add text
     form.append("content", fullMessage);
 
-    // Add image if one exists
+    // Attach image if present
     if (req.file) {
       form.append("file", fs.createReadStream(req.file.path), {
-        filename: "screenshot.png",
+        filename: "upload.png",
         contentType: "image/png",
       });
     }
@@ -51,7 +50,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
     if (req.file) fs.unlinkSync(req.file.path);
 
-    res.send("Message + Image sent to Discord!");
+    res.send("Message sent to Discord!");
   } catch (err) {
     console.error(err);
     res.status(500).send("Error");
