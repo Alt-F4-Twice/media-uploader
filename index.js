@@ -7,8 +7,12 @@ import fs from "fs";
 const app = express();
 const upload = multer({ dest: "uploads/" });
 
-// Admin password for /logs
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "supersecret123";
+// Use environment variable for admin password
+const ADMIN_PASSWORD = process.env.LOGS_PASSWORD;
+
+if (!ADMIN_PASSWORD) {
+  console.warn("⚠️ LOGS_PASSWORD not set in environment variables!");
+}
 
 // In-memory logs
 const logs = [];
@@ -19,10 +23,9 @@ function getUKTimestamp() {
   return now.toLocaleString("en-GB", { timeZone: "Europe/London" });
 }
 
-// ----------------- Original /upload -----------------
+// ----------------- /upload stays the same -----------------
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
-    // 🔒 API protection
     if (req.headers["x-api-key"] !== process.env.API_KEY) {
       return res.status(403).send("Forbidden");
     }
@@ -30,11 +33,8 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const user = req.body.user || "Unknown";
     const messageText = req.body.message || "";
     const hasImage = !!req.file;
-
-    // UK timestamp
     const timestamp = getUKTimestamp();
 
-    // Build Discord message
     const content = `By: ${user}\nDate & Time (UK): ${timestamp}\n${messageText}`;
 
     const form = new FormData();
@@ -47,14 +47,12 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       });
     }
 
-    // Send to Discord
     await fetch(process.env.DISCORD_WEBHOOK, {
       method: "POST",
       body: form,
       headers: form.getHeaders(),
     });
 
-    // Log this upload
     logs.push({
       user,
       timestamp,
@@ -74,7 +72,9 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 // ----------------- Admin logs -----------------
 app.get("/logs", (req, res) => {
   const password = req.query.password;
-  if (password !== ADMIN_PASSWORD) return res.status(403).send("Forbidden");
+  if (!ADMIN_PASSWORD || password !== ADMIN_PASSWORD) {
+    return res.status(403).send("Forbidden");
+  }
 
   let html = "<h1>Upload Logs</h1><ul>";
   logs.forEach((log) => {
