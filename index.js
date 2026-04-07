@@ -1,14 +1,17 @@
 import express from "express";
+import multer from "multer";
+import fetch from "node-fetch";
+import FormData from "form-data";
+import fs from "fs";
+
+const app = express();
+const upload = multer({ dest: "uploads/" });
+
+// Admin password for /logs
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "supersecret123";
 
 // In-memory logs
 const logs = [];
-
-// Admin password (change this)
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "supersecret123";
-
-const app = express();
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
 
 // Helper: UK timestamp
 function getUKTimestamp() {
@@ -16,27 +19,73 @@ function getUKTimestamp() {
   return now.toLocaleString("en-GB", { timeZone: "Europe/London" });
 }
 
-// ----------------- New logs endpoint -----------------
-app.post("/log", (req, res) => {
-  // Only accept logs from your /upload backend
-  const { user, message, hasImage } = req.body;
-  const timestamp = getUKTimestamp();
+// ----------------- Original /upload -----------------
+app.post("/upload", upload.single("file"), async (req, res) => {
+  try {
+    // 🔒 API protection
+    if (req.headers["x-api-key"] !== process.env.API_KEY) {
+      return res.status(403).send("Forbidden");
+    }
 
-  logs.push({ user, message, hasImage, timestamp });
-  res.send("Logged!");
+    const user = req.body.user || "Unknown";
+    const messageText = req.body.message || "";
+    const hasImage = !!req.file;
+
+    // UK timestamp
+    const timestamp = getUKTimestamp();
+
+    // Build Discord message
+    const content = `By: ${user}\nDate & Time (UK): ${timestamp}\n${messageText}`;
+
+    const form = new FormData();
+    form.append("content", content);
+
+    if (hasImage) {
+      form.append("file", fs.createReadStream(req.file.path), {
+        filename: req.file.originalname || "upload.png",
+        contentType: "image/png",
+      });
+    }
+
+    // Send to Discord
+    await fetch(process.env.DISCORD_WEBHOOK, {
+      method: "POST",
+      body: form,
+      headers: form.getHeaders(),
+    });
+
+    // Log this upload
+    logs.push({
+      user,
+      timestamp,
+      message: messageText,
+      hasImage,
+    });
+
+    if (hasImage) fs.unlinkSync(req.file.path);
+
+    res.send("Upload sent to Discord!");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error");
+  }
 });
 
-// ----------------- Admin logs view -----------------
+// ----------------- Admin logs -----------------
 app.get("/logs", (req, res) => {
   const password = req.query.password;
   if (password !== ADMIN_PASSWORD) return res.status(403).send("Forbidden");
 
   let html = "<h1>Upload Logs</h1><ul>";
   logs.forEach((log) => {
-    html += `<li><strong>${log.timestamp}</strong> - ${log.user} - ${log.hasImage ? "Photo" : ""}${log.hasImage && log.message ? " + " : ""}${log.message ? "Message" : ""}${!log.hasImage && !log.message ? "Nothing" : ""}</li>`;
+    html += `<li><strong>${log.timestamp}</strong> - ${log.user} - ${
+      log.hasImage ? "Photo" : ""
+    }${log.hasImage && log.message ? " + " : ""}${
+      log.message ? "Message" : ""
+    }${!log.hasImage && !log.message ? "Nothing" : ""}</li>`;
   });
   html += "</ul>";
   res.send(html);
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+app.listen(3000, () => console.log("Server running"));
