@@ -1,22 +1,24 @@
 import express from "express";
+import multer from "multer";
 import fetch from "node-fetch";
 import FormData from "form-data";
+import fs from "fs";
 
 const app = express();
+const upload = multer({ dest: "uploads/" });
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-app.post("/upload", async (req, res) => {
+app.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (req.headers["x-api-key"] !== process.env.API_KEY) {
       return res.status(403).send("Forbidden");
     }
 
-    // Get user and message from Shortcut
     const user = req.body.user || "Unknown";
-    const messageText = req.body.message || "No message provided";
+    const messageText = req.body.message || "";
 
-    // Current date & time
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -26,19 +28,30 @@ app.post("/upload", async (req, res) => {
     const seconds = String(now.getSeconds()).padStart(2, "0");
     const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 
-    // Build Discord message
-    const fullMessage = `📩 New Message\nBy: ${user}\nDate & Time: ${timestamp}\nMessage: ${messageText}`;
+    const fullMessage = `📸 New Screenshot\nBy: ${user}\nDate & Time: ${timestamp}\nMessage: ${messageText}`;
 
     const form = new FormData();
+
+    // Add text
     form.append("content", fullMessage);
+
+    // Add image if one exists
+    if (req.file) {
+      form.append("file", fs.createReadStream(req.file.path), {
+        filename: "screenshot.png",
+        contentType: "image/png",
+      });
+    }
 
     await fetch(process.env.DISCORD_WEBHOOK, {
       method: "POST",
       body: form,
-      headers: form.getHeaders()
+      headers: form.getHeaders(),
     });
 
-    res.send("Message sent to Discord!");
+    if (req.file) fs.unlinkSync(req.file.path);
+
+    res.send("Message + Image sent to Discord!");
   } catch (err) {
     console.error(err);
     res.status(500).send("Error");
