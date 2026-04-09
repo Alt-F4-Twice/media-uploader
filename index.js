@@ -60,9 +60,25 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       hasImage,
     });
 
-    if (hasImage) fs.unlinkSync(req.file.path);
+   if (hasImage) {
+  const sizeMB = req.file.size / (1024 * 1024);
 
-    res.send("Upload sent to Discord!");
+et responseMessage = "Upload sent to Discord!";
+
+    if (hasImage) {
+      const sizeMB = req.file.size / (1024 * 1024);
+
+      if (sizeMB > 7.5) {
+        responseMessage += " (⚠️ Very large — may fail upload)";
+      } else if (sizeMB > 4) {
+        responseMessage += " (⚠️ Large — may not preview as image)";
+      }
+
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.send(responseMessage);
+
   } catch (err) {
     console.error(err);
     res.status(500).send("Error");
