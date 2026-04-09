@@ -7,33 +7,34 @@ import fs from "fs";
 const app = express();
 const upload = multer({ dest: "uploads/" });
 
-// Use environment variable for admin password
+// Environment variables
 const ADMIN_PASSWORD = process.env.LOGS_PASSWORD;
+const API_KEY = process.env.API_KEY;
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
 
-if (!ADMIN_PASSWORD) {
-  console.warn("⚠️ LOGS_PASSWORD not set in environment variables!");
-}
+if (!ADMIN_PASSWORD) console.warn("⚠️ LOGS_PASSWORD not set!");
+if (!API_KEY) console.warn("⚠️ API_KEY not set!");
+if (!DISCORD_WEBHOOK) console.warn("⚠️ DISCORD_WEBHOOK not set!");
 
-// In-memory logs
+// In‑memory logs
 const logs = [];
 
-// Helper: UK timestamp
+// UK timestamp helper
 function getUKTimestamp() {
-  const now = new Date();
-  return now.toLocaleString("en-GB", { timeZone: "Europe/London" });
+  return new Date().toLocaleString("en-GB", { timeZone: "Europe/London" });
 }
 
-// ----------------- /upload stays the same -----------------
+// ----------------- UPLOAD ENDPOINT -----------------
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
-    if (req.headers["x-api-key"] !== process.env.API_KEY) {
+    if (req.headers["x-api-key"] !== API_KEY) {
       return res.status(403).send("Forbidden");
     }
 
     const user = req.body.user || "Unknown";
     const messageText = req.body.message || "";
-    const hasImage = !!req.file;
     const timestamp = getUKTimestamp();
+    const hasImage = Boolean(req.file);
 
     const content = `By: ${user}\nDate & Time (UK): ${timestamp}\n${messageText}`;
 
@@ -43,16 +44,18 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     if (hasImage) {
       form.append("file", fs.createReadStream(req.file.path), {
         filename: req.file.originalname || "upload.png",
-        contentType: "image/png",
+        contentType: req.file.mimetype || "image/png",
       });
     }
 
-    await fetch(process.env.DISCORD_WEBHOOK, {
+    // Send to Discord
+    await fetch(DISCORD_WEBHOOK, {
       method: "POST",
       body: form,
       headers: form.getHeaders(),
     });
 
+    // Save log
     logs.push({
       user,
       timestamp,
@@ -60,10 +63,8 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       hasImage,
     });
 
-   if (hasImage) {
-  const sizeMB = req.file.size / (1024 * 1024);
-
-et responseMessage = "Upload sent to Discord!";
+    // Build response message
+    let responseMessage = "Upload sent to Discord!";
 
     if (hasImage) {
       const sizeMB = req.file.size / (1024 * 1024);
@@ -74,34 +75,44 @@ et responseMessage = "Upload sent to Discord!";
         responseMessage += " (⚠️ Large — may not preview as image)";
       }
 
-      fs.unlinkSync(req.file.path);
+      // Cleanup
+      fs.unlink(req.file.path, () => {});
     }
 
     res.send(responseMessage);
-
   } catch (err) {
-    console.error(err);
+    console.error("Upload error:", err);
     res.status(500).send("Error");
   }
 });
 
-// ----------------- Admin logs -----------------
+// ----------------- ADMIN LOGS -----------------
 app.get("/logs", (req, res) => {
-  const password = req.query.password;
-  if (!ADMIN_PASSWORD || password !== ADMIN_PASSWORD) {
+  if (req.query.password !== ADMIN_PASSWORD) {
     return res.status(403).send("Forbidden");
   }
 
-  let html = "<h1>Upload Logs</h1><ul>";
-  logs.forEach((log) => {
-    html += `<li><strong>${log.timestamp}</strong> - ${log.user} - ${
-      log.hasImage ? "Photo" : ""
-    }${log.hasImage && log.message ? " + " : ""}${
-      log.message ? "Message" : ""
-    }${!log.hasImage && !log.message ? "Nothing" : ""}</li>`;
-  });
-  html += "</ul>";
+  const html = `
+    <h1>Upload Logs</h1>
+    <ul>
+      ${logs
+        .map(
+          (log) => `
+        <li>
+          <strong>${log.timestamp}</strong> - ${log.user} -
+          ${log.hasImage ? "Photo" : ""}
+          ${log.hasImage && log.message ? " + " : ""}
+          ${log.message ? "Message" : ""}
+          ${!log.hasImage && !log.message ? "Nothing" : ""}
+        </li>`
+        )
+        .join("")}
+    </ul>
+  `;
+
   res.send(html);
 });
 
-app.listen(3000, () => console.log("Server running"));
+// ----------------- START SERVER -----------------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
