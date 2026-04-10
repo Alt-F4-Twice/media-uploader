@@ -60,11 +60,6 @@ const text = await response.text();
 console.log("DISCORD STATUS:", response.status);
 console.log("DISCORD RESPONSE:", text);
 
-const text = await response.text();
-
-console.log("Discord status:", response.status);
-console.log("Discord response:", text);
-
     // Save log
     logs.push({
       user,
