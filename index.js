@@ -99,3 +99,10 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     res.status(500).send("Error");
   }
 });
+
+// ----------------- START SERVER -----------------
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
