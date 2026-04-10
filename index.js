@@ -87,7 +87,6 @@ if (messageText) {
 }
 
 // Create form ONCE
-const form = new FormData();
 form.append("content", message);
 
 // ✅ Only add file if it exists
