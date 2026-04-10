@@ -37,47 +37,59 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const timestamp = getUKTimestamp();
     const hasImage = Boolean(req.file);
 
-    const content = `By: ${user}\nDate & Time (UK): ${timestamp}\n${messageText}`;
-
-    const form = new FormData();
-    form.append("content", content);
+    // ✅ Build final message ONCE
+    let message = `By: ${user}\nDate & Time (UK): ${timestamp}`;
 
     if (messageText) {
       message += `\n${messageText}`;
     }
 
-    // ✅ Only add file if it exists
+    // ✅ Create form ONCE
+    const form = new FormData();
+    form.append("content", message);
+
     if (hasImage) {
       form.append("file", fs.createReadStream(req.file.path));
     }
 
     // 🚀 Send to Discord
-    const response = await fetch(process.env.DISCORD_WEBHOOK, {
+    const response = await fetch(DISCORD_WEBHOOK, {
       method: "POST",
       body: form,
       headers: form.getHeaders()
     });
-
 
     const discordResponse = await response.text();
 
     console.log("DISCORD STATUS:", response.status);
     console.log("DISCORD RESPONSE:", discordResponse);
 
-    // ❌ If Discord failed
     if (response.status !== 204) {
-      return res
-        .status(500)
-        .send(`Discord failed (${response.status}): ${discordResponse}`);
+      return res.status(500).send(
+        `Discord failed (${response.status}): ${discordResponse}`
+      );
     }
 
-    // ✅ Save log
+    // 🧠 Save log
     logs.push({
       user,
       timestamp,
       message: messageText,
       hasImage,
     });
+
+    // 🧹 cleanup file
+    if (hasImage) {
+      fs.unlink(req.file.path, () => {});
+    }
+
+    res.send("Upload sent to Discord!");
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error");
+  }
+});
 
     // Build message
 let message = `By: ${user}\nDate & Time (UK): ${timestamp}`;
