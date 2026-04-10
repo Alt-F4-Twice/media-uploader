@@ -49,11 +49,16 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     }
 
     // Send to Discord
-    const response = await fetch(DISCORD_WEBHOOK, {
+   const response = await fetch(DISCORD_WEBHOOK, {
   method: "POST",
   body: form,
   headers: form.getHeaders(),
 });
+
+const text = await response.text();
+
+console.log("DISCORD STATUS:", response.status);
+console.log("DISCORD RESPONSE:", text);
 
 const text = await response.text();
 
