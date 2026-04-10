@@ -1,32 +1,3 @@
-// Import labels
-
-import express from "express";
-import multer from "multer";
-import fetch from "node-fetch";
-import FormData from "form-data";
-import fs from "fs";
-
-const app = express();
-const upload = multer({ dest: "uploads/" });
-
-// Environment variables
-const ADMIN_PASSWORD = process.env.LOGS_PASSWORD;
-const API_KEY = process.env.API_KEY;
-const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
-
-if (!ADMIN_PASSWORD) console.warn("⚠️ LOGS_PASSWORD not set!");
-if (!API_KEY) console.warn("⚠️ API_KEY not set!");
-if (!DISCORD_WEBHOOK) console.warn("⚠️ DISCORD_WEBHOOK not set!");
-
-// In‑memory logs
-const logs = [];
-
-// UK timestamp helper
-function getUKTimestamp() {
-  return new Date().toLocaleString("en-GB", { timeZone: "Europe/London" });
-}
-
-// ----------------- UPLOAD ENDPOINT -----------------
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (req.headers["x-api-key"] !== API_KEY) {
@@ -50,19 +21,26 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       });
     }
 
-    // Send to Discord
-   const response = await fetch(DISCORD_WEBHOOK, {
-  method: "POST",
-  body: form,
-  headers: form.getHeaders(),
-});
+    // 🔥 Send to Discord
+    const response = await fetch(DISCORD_WEBHOOK, {
+      method: "POST",
+      body: form,
+      headers: form.getHeaders(),
+    });
 
-const text = await response.text();
+    const discordResponse = await response.text();
 
-console.log("DISCORD STATUS:", response.status);
-console.log("DISCORD RESPONSE:", text);
+    console.log("DISCORD STATUS:", response.status);
+    console.log("DISCORD RESPONSE:", discordResponse);
 
-    // Save log
+    // ❌ If Discord failed
+    if (response.status !== 204) {
+      return res
+        .status(500)
+        .send(`Discord failed (${response.status}): ${discordResponse}`);
+    }
+
+    // ✅ Save log
     logs.push({
       user,
       timestamp,
@@ -70,7 +48,7 @@ console.log("DISCORD RESPONSE:", text);
       hasImage,
     });
 
-    // Build response message
+    // ✅ Build response message
     let responseMessage = "Upload sent to Discord!";
 
     if (hasImage) {
@@ -82,44 +60,14 @@ console.log("DISCORD RESPONSE:", text);
         responseMessage += " (⚠️ Large — may not preview as image)";
       }
 
-      // Cleanup
+      // 🧹 Delete file AFTER sending
       fs.unlink(req.file.path, () => {});
     }
 
     res.send(responseMessage);
+
   } catch (err) {
     console.error("Upload error:", err);
     res.status(500).send("Error");
   }
 });
-
-// ----------------- ADMIN LOGS -----------------
-app.get("/logs", (req, res) => {
-  if (req.query.password !== ADMIN_PASSWORD) {
-    return res.status(403).send("Forbidden");
-  }
-
-  const html = `
-    <h1>Upload Logs</h1>
-    <ul>
-      ${logs
-        .map(
-          (log) => `
-        <li>
-          <strong>${log.timestamp}</strong> - ${log.user} -
-          ${log.hasImage ? "Photo" : ""}
-          ${log.hasImage && log.message ? " + " : ""}
-          ${log.message ? "Message" : ""}
-          ${!log.hasImage && !log.message ? "Nothing" : ""}
-        </li>`
-        )
-        .join("")}
-    </ul>
-  `;
-
-  res.send(html);
-});
-
-// ----------------- START SERVER -----------------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
