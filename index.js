@@ -42,19 +42,22 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const form = new FormData();
     form.append("content", content);
 
-    if (hasImage) {
-      form.append("file", fs.createReadStream(req.file.path), {
-        filename: req.file.originalname || "upload.png",
-        contentType: req.file.mimetype || "image/png",
-      });
+    if (messageText) {
+      message += `\n${messageText}`;
     }
 
-    // 🔥 Send to Discord
-    const response = await fetch(DISCORD_WEBHOOK, {
+    // ✅ Only add file if it exists
+    if (hasImage) {
+      form.append("file", fs.createReadStream(req.file.path));
+    }
+
+    // 🚀 Send to Discord
+    const response = await fetch(process.env.DISCORD_WEBHOOK, {
       method: "POST",
       body: form,
-      headers: form.getHeaders(),
+      headers: form.getHeaders()
     });
+
 
     const discordResponse = await response.text();
 
@@ -76,29 +79,21 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       hasImage,
     });
 
-    // ✅ Build response message
-    let responseMessage = "Upload sent to Discord!";
+    // Build message
+let message = `By: ${user}\nDate & Time (UK): ${timestamp}`;
 
-    if (hasImage) {
-      const sizeMB = req.file.size / (1024 * 1024);
+if (messageText) {
+  message += `\n${messageText}`;
+}
 
-      if (sizeMB > 7.5) {
-        responseMessage += " (⚠️ Very large — may fail upload)";
-      } else if (sizeMB > 4) {
-        responseMessage += " (⚠️ Large — may not preview as image)";
-      }
+// Create form ONCE
+const form = new FormData();
+form.append("content", message);
 
-      // 🧹 Delete file AFTER sending
-      fs.unlink(req.file.path, () => {});
-    }
-
-    res.send(responseMessage);
-
-  } catch (err) {
-    console.error("Upload error:", err);
-    res.status(500).send("Error");
-  }
-});
+// ✅ Only add file if it exists
+if (hasImage) {
+  form.append("file", fs.createReadStream(req.file.path));
+}
 
 // ----------------- START SERVER -----------------
 const PORT = process.env.PORT || 3000;
