@@ -1,3 +1,31 @@
+// Import labels
+
+import express from "express";
+import multer from "multer";
+import fetch from "node-fetch";
+import FormData from "form-data";
+import fs from "fs";
+
+const app = express();
+const upload = multer({ dest: "uploads/" });
+
+// Environment variables
+const ADMIN_PASSWORD = process.env.LOGS_PASSWORD;
+const API_KEY = process.env.API_KEY;
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
+
+if (!ADMIN_PASSWORD) console.warn("⚠️ LOGS_PASSWORD not set!");
+if (!API_KEY) console.warn("⚠️ API_KEY not set!");
+if (!DISCORD_WEBHOOK) console.warn("⚠️ DISCORD_WEBHOOK not set!");
+
+// In‑memory logs
+const logs = [];
+
+// UK timestamp helper
+function getUKTimestamp() {
+  return new Date().toLocaleString("en-GB", { timeZone: "Europe/London" });
+}
+
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (req.headers["x-api-key"] !== API_KEY) {
