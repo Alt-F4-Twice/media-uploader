@@ -1,4 +1,5 @@
 // Import labels
+
 import express from "express";
 import multer from "multer";
 import fetch from "node-fetch";
@@ -20,37 +21,70 @@ if (!DISCORD_WEBHOOK) console.warn("⚠️ DISCORD_WEBHOOK not set!");
 // In-memory logs
 const logs = [];
 
-// GLOBAL rate limiter (IMPORTANT)
-let lastSent = 0;
+// =========================
+// ✅ QUEUE SYSTEM (FIX)
+// =========================
+const queue = [];
+let processing = false;
+
+async function processQueue() {
+  if (processing) return;
+  processing = true;
+
+  while (queue.length > 0) {
+    const { form, resolve, reject } = queue.shift();
+
+    try {
+      const response = await fetch(DISCORD_WEBHOOK, {
+        method: "POST",
+        body: form,
+        headers: form.getHeaders()
+      });
+
+      const text = await response.text();
+
+      // Handle Discord rate limit (429)
+      if (response.status === 429) {
+        let retryAfter = 2000;
+
+        try {
+          const data = JSON.parse(text);
+          retryAfter = (data.retry_after || 2) * 1000;
+        } catch {}
+
+        console.log("⏳ Rate limited. Waiting:", retryAfter);
+
+        await new Promise(r => setTimeout(r, retryAfter));
+
+        queue.unshift({ form, resolve, reject });
+        continue;
+      }
+
+      resolve({ response, text });
+
+      // small safety delay
+      await new Promise(r => setTimeout(r, 400));
+
+    } catch (err) {
+      reject(err);
+    }
+  }
+
+  processing = false;
+}
+
+function enqueue(form) {
+  return new Promise((resolve, reject) => {
+    queue.push({ form, resolve, reject });
+    processQueue();
+  });
+}
 
 // UK timestamp helper
 function getUKTimestamp() {
   return new Date().toLocaleString("en-GB", { timeZone: "Europe/London" });
 }
 
-// Discord sender (queue + rate limit)
-async function sendToDiscord(form) {
-  const now = Date.now();
-
-  const delay = Math.max(0, 500 - (now - lastSent));
-  if (delay > 0) {
-    await new Promise(r => setTimeout(r, delay));
-  }
-
-  lastSent = Date.now();
-
-  const response = await fetch(DISCORD_WEBHOOK, {
-    method: "POST",
-    body: form,
-    headers: form.getHeaders()
-  });
-
-  const text = await response.text();
-
-  return { response, text };
-}
-
-// Upload route
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (req.headers["x-api-key"] !== API_KEY) {
@@ -62,7 +96,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const timestamp = getUKTimestamp();
     const hasImage = Boolean(req.file);
 
-    // Build message
+    // Build final message
     let message = `By: ${user}\nDate & Time (UK): ${timestamp}`;
 
     if (messageText) {
@@ -77,8 +111,10 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       form.append("file", fs.createReadStream(req.file.path));
     }
 
-    // Send to Discord
-    const { response, text: discordResponse } = await sendToDiscord(form);
+    // =========================
+    // FIXED DISCORD SEND
+    // =========================
+    const { response, text: discordResponse } = await enqueue(form);
 
     console.log("DISCORD STATUS:", response.status);
     console.log("DISCORD RESPONSE:", discordResponse);
@@ -110,7 +146,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-// Start server
+// ----------------- START SERVER -----------------
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
