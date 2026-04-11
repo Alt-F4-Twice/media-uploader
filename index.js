@@ -56,8 +56,6 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     
 let lastSent = 0;
 
-  const now = Date.now();
-
   // enforce ~500ms gap between requests
   const delay = Math.max(0, 500 - (now - lastSent));
   if (delay > 0) {
