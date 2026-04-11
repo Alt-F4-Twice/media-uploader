@@ -75,22 +75,26 @@ async function sendToDiscord(form) {
 }
 
     // 🚀 Send to Discord
-    const { response, text: discordResponse } = await sendToDiscord(form);
-      method: "POST",
-      body: form,
-      headers: form.getHeaders()
-    });
+    async function sendToDiscord(form) {
+  const now = Date.now();
 
-    const discordResponse = await response.text();
+  const delay = Math.max(0, 500 - (now - lastSent));
+  if (delay > 0) {
+    await new Promise(r => setTimeout(r, delay));
+  }
 
-    console.log("DISCORD STATUS:", response.status);
-    console.log("DISCORD RESPONSE:", discordResponse);
+  lastSent = Date.now();
 
-    if (response.status !== 204) {
-      return res.status(500).send(
-        `Discord failed (${response.status}): ${discordResponse}`
-      );
-    }
+  const response = await fetch(DISCORD_WEBHOOK, {
+    method: "POST",
+    body: form,
+    headers: form.getHeaders()
+  });
+
+  const text = await response.text();
+
+  return { response, text };
+}
 
     // 🧠 Save log
     logs.push({
