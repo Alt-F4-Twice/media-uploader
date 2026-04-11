@@ -141,9 +141,9 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     res.send("Upload sent to Discord!");
 
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Error");
-  }
+  console.error("UPLOAD CRASH ERROR:", err);
+  res.status(500).send(err?.message || JSON.stringify(err));
+}
 });
 
 // ----------------- START SERVER -----------------
