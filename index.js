@@ -52,8 +52,30 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       form.append("file", fs.createReadStream(req.file.path));
     }
 
+    //Rate limit
+    
+let lastSent = 0;
+
+async function sendToDiscord(form) {
+  const now = Date.now();
+
+  // enforce ~500ms gap between requests
+  const delay = Math.max(0, 500 - (now - lastSent));
+  if (delay > 0) {
+    await new Promise(r => setTimeout(r, delay));
+  }
+
+  lastSent = Date.now();
+
+  return fetch(DISCORD_WEBHOOK, {
+    method: "POST",
+    body: form,
+    headers: form.getHeaders()
+  });
+}
+
     // 🚀 Send to Discord
-    const response = await fetch(DISCORD_WEBHOOK, {
+    const response = await sendToDiscord(form);
       method: "POST",
       body: form,
       headers: form.getHeaders()
