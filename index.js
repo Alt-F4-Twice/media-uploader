@@ -91,25 +91,9 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-    // Build message
-let message = `By: ${user}\nDate & Time (UK): ${timestamp}`;
-
-if (messageText) {
-  message += `\n${messageText}`;
-}
-
-// Create form ONCE
-form.append("content", message);
-
-// ✅ Only add file if it exists
-if (hasImage) {
-  form.append("file", fs.createReadStream(req.file.path));
-}
-
 // ----------------- START SERVER -----------------
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-
