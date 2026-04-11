@@ -56,7 +56,6 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     
 let lastSent = 0;
 
-async function sendToDiscord(form) {
   const now = Date.now();
 
   // enforce ~500ms gap between requests
