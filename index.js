@@ -75,7 +75,7 @@ async function sendToDiscord(form) {
 }
 
     // 🚀 Send to Discord
-    const response = await sendToDiscord(form);
+    const { response, text: discordResponse } = await sendToDiscord(form);
       method: "POST",
       body: form,
       headers: form.getHeaders()
