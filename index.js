@@ -1,5 +1,4 @@
 // Import labels
-
 import express from "express";
 import multer from "multer";
 import fetch from "node-fetch";
@@ -18,61 +17,19 @@ if (!ADMIN_PASSWORD) console.warn("⚠️ LOGS_PASSWORD not set!");
 if (!API_KEY) console.warn("⚠️ API_KEY not set!");
 if (!DISCORD_WEBHOOK) console.warn("⚠️ DISCORD_WEBHOOK not set!");
 
-// In‑memory logs
+// In-memory logs
 const logs = [];
+
+// GLOBAL rate limiter (IMPORTANT)
+let lastSent = 0;
 
 // UK timestamp helper
 function getUKTimestamp() {
   return new Date().toLocaleString("en-GB", { timeZone: "Europe/London" });
 }
 
-app.post("/upload", upload.single("file"), async (req, res) => {
-  try {
-    if (req.headers["x-api-key"] !== API_KEY) {
-      return res.status(403).send("Forbidden");
-    }
-
-    const user = req.body.user || "Unknown";
-    const messageText = req.body.message || "";
-    const timestamp = getUKTimestamp();
-    const hasImage = Boolean(req.file);
-
-    // ✅ Build final message ONCE
-    let message = `By: ${user}\nDate & Time (UK): ${timestamp}`;
-
-    if (messageText) {
-      message += `\n${messageText}`;
-    }
-
-    // ✅ Create form ONCE
-    const form = new FormData();
-    form.append("content", message);
-
-    if (hasImage) {
-      form.append("file", fs.createReadStream(req.file.path));
-    }
-
-    //Rate limit
-    
-let lastSent = 0;
-
-  // enforce ~500ms gap between requests
-  const delay = Math.max(0, 500 - (now - lastSent));
-  if (delay > 0) {
-    await new Promise(r => setTimeout(r, delay));
-  }
-
-  lastSent = Date.now();
-
-  return fetch(DISCORD_WEBHOOK, {
-    method: "POST",
-    body: form,
-    headers: form.getHeaders()
-  });
-}
-
-    // 🚀 Send to Discord
-    async function sendToDiscord(form) {
+// Discord sender (queue + rate limit)
+async function sendToDiscord(form) {
   const now = Date.now();
 
   const delay = Math.max(0, 500 - (now - lastSent));
@@ -93,7 +50,46 @@ let lastSent = 0;
   return { response, text };
 }
 
-    // 🧠 Save log
+// Upload route
+app.post("/upload", upload.single("file"), async (req, res) => {
+  try {
+    if (req.headers["x-api-key"] !== API_KEY) {
+      return res.status(403).send("Forbidden");
+    }
+
+    const user = req.body.user || "Unknown";
+    const messageText = req.body.message || "";
+    const timestamp = getUKTimestamp();
+    const hasImage = Boolean(req.file);
+
+    // Build message
+    let message = `By: ${user}\nDate & Time (UK): ${timestamp}`;
+
+    if (messageText) {
+      message += `\n${messageText}`;
+    }
+
+    // Create form
+    const form = new FormData();
+    form.append("content", message);
+
+    if (hasImage) {
+      form.append("file", fs.createReadStream(req.file.path));
+    }
+
+    // Send to Discord
+    const { response, text: discordResponse } = await sendToDiscord(form);
+
+    console.log("DISCORD STATUS:", response.status);
+    console.log("DISCORD RESPONSE:", discordResponse);
+
+    if (response.status !== 204) {
+      return res.status(500).send(
+        `Discord failed (${response.status}): ${discordResponse}`
+      );
+    }
+
+    // Save log
     logs.push({
       user,
       timestamp,
@@ -101,7 +97,7 @@ let lastSent = 0;
       hasImage,
     });
 
-    // 🧹 cleanup file
+    // Cleanup file
     if (hasImage) {
       fs.unlink(req.file.path, () => {});
     }
@@ -114,7 +110,7 @@ let lastSent = 0;
   }
 });
 
-// ----------------- START SERVER -----------------
+// Start server
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
